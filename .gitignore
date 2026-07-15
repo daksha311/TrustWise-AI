@@ -33,3 +33,4 @@ pnpm-debug.log*
 packages/extension/build/
 packages/extension/zip/
 node_modules
+tlsn-extension-rebuild/packages/extension/build/
