@@ -1,0 +1,46 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_24-784e5776af231fc20fb1d478f4b48cddf036dfba",
+  "solcVersion": "0.8.24",
+  "solcLongVersion": "0.8.24+commit.e11b9ed9",
+  "compilerType": "solc",
+  "userSourceNameMap": {
+    "contracts/Escrow.sol": "project/contracts/Escrow.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "shanghai",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode.linkReferences",
+            "evm.bytecode.object",
+            "evm.bytecode.opcodes",
+            "evm.bytecode.sourceMap",
+            "evm.deployedBytecode.immutableReferences",
+            "evm.deployedBytecode.linkReferences",
+            "evm.deployedBytecode.object",
+            "evm.deployedBytecode.opcodes",
+            "evm.deployedBytecode.sourceMap",
+            "evm.methodIdentifiers"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/Escrow.sol": {
+        "content": "// SPDX-License-Identifier: MIT\r\npragma solidity 0.8.24;\r\n\r\n/**\r\n * @title TrustWiseAI Escrow Protocol\r\n * @notice Handles decentralized escrow logic with AI-driven dispute resolution arbitration inputs.\r\n */\r\ncontract Escrow {\r\n    \r\n    enum Status { Pending, Disputed, Released, Refunded }\r\n\r\n    struct EscrowTransaction {\r\n        address buyer;\r\n        address seller;\r\n        uint256 amount;\r\n        uint256 timestamp;\r\n        Status status;\r\n        string evidenceHash; // IPFS/URI hash of initial terms or text evidence\r\n        string aiVerdict;    // Final stored text verdict from the automated arbiter\r\n    }\r\n\r\n    // State Variables\r\n    uint256 public escrowCounter;\r\n    mapping(uint256 => EscrowTransaction) public escrows;\r\n\r\n    // Custom Errors for Gas Optimization\r\n    error Unauthorized();\r\n    error InvalidStatus();\r\n    error ValueCannotBeZero();\r\n    error InvalidAddress();\r\n\r\n    // Events for Frontend Subscriptions (Track A UI)\r\n    event EscrowCreated(uint256 indexed escrowId, address indexed buyer, address indexed seller, uint256 amount);\r\n    event EscrowDisputed(uint256 indexed escrowId, string evidenceHash);\r\n    event EscrowReleased(uint256 indexed escrowId, string aiVerdict);\r\n    event EscrowRefunded(uint256 indexed escrowId, string aiVerdict);\r\n\r\n    // Modifiers\r\n    modifier onlyBuyer(uint256 _escrowId) {\r\n        if (msg.sender != escrows[_escrowId].buyer) revert Unauthorized();\r\n        _;\r\n    }\r\n\r\n    modifier onlyParties(uint256 _escrowId) {\r\n        if (msg.sender != escrows[_escrowId].buyer && msg.sender != escrows[_escrowId].seller) revert Unauthorized();\r\n        _;\r\n    }\r\n\r\n    /**\r\n     * @notice Initiates a new escrow agreement and locks the deposited ETH.\r\n     * @param _seller The counterparty receiving funds upon successful completion.\r\n     */\r\n    function createEscrow(address _seller) external payable returns (uint256) {\r\n        if (msg.value == 0) revert ValueCannotBeZero();\r\n        if (_seller == address(0) || _seller == msg.sender) revert InvalidAddress();\r\n\r\n        uint256 escrowId = escrowCounter;\r\n        \r\n        escrows[escrowId] = EscrowTransaction({\r\n            buyer: msg.sender,\r\n            seller: _seller,\r\n            amount: msg.value,\r\n            timestamp: block.timestamp,\r\n            status: Status.Pending,\r\n            evidenceHash: \"\",\r\n            aiVerdict: \"\"\r\n        });\r\n\r\n        escrowCounter++;\r\n\r\n        emit EscrowCreated(escrowId, msg.sender, _seller, msg.value);\r\n        return escrowId;\r\n    }\r\n\r\n    /**\r\n     * @notice Escalates the transaction status to Disputed.\r\n     * @param _escrowId The unique target escrow identifier.\r\n     * @param _evidenceHash The reference pointer for submitted documentation.\r\n     */\r\n    function dispute(uint256 _escrowId, string calldata _evidenceHash) external onlyParties(_escrowId) {\r\n        EscrowTransaction storage item = escrows[_escrowId];\r\n        if (item.status != Status.Pending) revert InvalidStatus();\r\n\r\n        item.status = Status.Disputed;\r\n        item.evidenceHash = _evidenceHash;\r\n\r\n        emit EscrowDisputed(_escrowId, _evidenceHash);\r\n    }\r\n\r\n    /**\r\n     * @notice Releases locked funds directly to the seller. \r\n     * @dev Can be invoked natively by the buyer or by the parties following an AI adjudication routing.\r\n     */\r\n    function releaseFunds(uint256 _escrowId, string calldata _aiVerdict) external onlyParties(_escrowId) {\r\n        EscrowTransaction storage item = escrows[_escrowId];\r\n        if (item.status != Status.Pending && item.status != Status.Disputed) revert InvalidStatus();\r\n\r\n        item.status = Status.Released;\r\n        item.aiVerdict = _aiVerdict;\r\n\r\n        uint256 paymentAmount = item.amount;\r\n        item.amount = 0; // Prevent Reentrancy\r\n\r\n        (bool success, ) = payable(item.seller).call{value: paymentAmount}(\"\");\r\n        require(success, \"Transfer failed\");\r\n\r\n        emit EscrowReleased(_escrowId, _aiVerdict);\r\n    }\r\n\r\n    /**\r\n     * @notice Returns locked funds directly back to the buyer.\r\n     * @dev Executed when an AI arbitration consensus validates a refund criteria.\r\n     */\r\n    function refundFunds(uint256 _escrowId, string calldata _aiVerdict) external onlyParties(_escrowId) {\r\n        EscrowTransaction storage item = escrows[_escrowId];\r\n        if (item.status != Status.Pending && item.status != Status.Disputed) revert InvalidStatus();\r\n\r\n        item.status = Status.Refunded;\r\n        item.aiVerdict = _aiVerdict;\r\n\r\n        uint256 refundAmount = item.amount;\r\n        item.amount = 0; // Prevent Reentrancy\r\n\r\n        (bool success, ) = payable(item.buyer).call{value: refundAmount}(\"\");\r\n        require(success, \"Transfer failed\");\r\n\r\n        emit EscrowRefunded(_escrowId, _aiVerdict);\r\n    }\r\n\r\n    /**\r\n     * @notice Read helper to easily fetch transaction details for our UI hooks.\r\n     */\r\n    function getEscrowDetails(uint256 _escrowId) external view returns (EscrowTransaction memory) {\r\n        return escrows[_escrowId];\r\n    }\r\n}"
+      }
+    }
+  }
+}

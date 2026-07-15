@@ -32,3 +32,4 @@ pnpm-debug.log*
 # TLSNotary build artifacts
 packages/extension/build/
 packages/extension/zip/
+node_modules
