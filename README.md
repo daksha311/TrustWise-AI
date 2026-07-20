@@ -24,7 +24,7 @@
   - [1. Smart Contracts Setup & Deployment](#1-smart-contracts-setup--deployment)
   - [2. Frontend Application Setup](#2-frontend-application-setup)
 - [Application Routes & Workflow](#-application-routes--workflow)
-- [Team NULL POINTERS](#-team-null-pointers)
+- [Team](#-team)
 - [License](#-license)
 
 ---
@@ -67,7 +67,7 @@ When disputes arise over digital assets or service fulfillment, parties submit d
                  |                                    |
                  v                                    v
 +----------------------------------+   +----------------------------------+
-|    Escrow.sol (Sepolia Testnet)  | <---|   Settlement / Verdict Dispatch  |
+|    Escrow.sol (Sepolia Testnet)  |<--|   Settlement / Verdict Dispatch  |
 +----------------------------------+   +----------------------------------+
 ```
 
@@ -246,11 +246,10 @@ struct EscrowTransaction {
 
 ---
 
-## 👥 Team NULL POINTERS
+## 👥 Team
 
-* **Harsha K** — Smart Contracts & Frontend Web3 Architecture
-* **Chennamraju Vaishnavi** — AI Arbitration Pipeline & Backend Service
-* **D Harikrishnan** — zkTLS Proof Integration & Data Systems
+* **Harsha K** — Frontend and Block chain
+* **Daksha SG** — Backend
 
 ---
 
