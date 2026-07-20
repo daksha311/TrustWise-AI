@@ -1,13 +1,13 @@
 {
   "name": "trustwise-backend",
-  "version": "2.0.0",
-  "description": "TrustWise AI Backend - zkTLS + Codex Agents + Smart Contract Integration",
+  "version": "3.0.0",
+  "description": "TrustWise AI Backend - Real zkTLS + Codex 3-Agent Pipeline",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "node test/simple-test.js",
-    "test:e2e": "node test/e2e-test.js"
+    "test": "node test/codex-real-test.js",
+    "test:integration": "node test/tlsnotary-test.js"
   },
   "dependencies": {
     "axios": "^1.6.0",
@@ -15,6 +15,7 @@
     "dotenv": "^16.3.1",
     "ethers": "^6.8.0",
     "express": "^4.18.2",
+    "openai": "^6.48.0",
     "winston": "^3.11.0"
   },
   "devDependencies": {
