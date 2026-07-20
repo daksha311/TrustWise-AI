@@ -67,7 +67,7 @@ When disputes arise over digital assets or service fulfillment, parties submit d
                  |                                    |
                  v                                    v
 +----------------------------------+   +----------------------------------+
-|    Escrow.sol (Sepolia Testnet)  | <---|   Settlement / Verdict Dispatch  |
+|    Escrow.sol (Sepolia Testnet)  |<--|   Settlement / Verdict Dispatch  |
 +----------------------------------+   +----------------------------------+
 ```
 
