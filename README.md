@@ -24,7 +24,7 @@
   - [1. Smart Contracts Setup & Deployment](#1-smart-contracts-setup--deployment)
   - [2. Frontend Application Setup](#2-frontend-application-setup)
 - [Application Routes & Workflow](#-application-routes--workflow)
-- [Team NULL POINTERS](#-team-null-pointers)
+- [Team](#-team)
 - [License](#-license)
 
 ---
