@@ -246,7 +246,7 @@ struct EscrowTransaction {
 
 ---
 
-## 👥 Team NULL POINTERS
+## 👥 Team
 
 * **Harsha K** — Frontend and Block chain
 * **Daksha SG** — Backend
