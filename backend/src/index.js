@@ -3,6 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const verifyRoutes = require('./routes/verify');
 const logger = require('./utils/logger');
+const errorHandler = require('./middleware/errorHandler');
+const requestLogger = require('./middleware/requestLogger');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -13,28 +15,25 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
+app.use(requestLogger);
 
 // Routes
 app.use('/api', verifyRoutes);
 
 // Root
 app.get('/', (req, res) => {
-  res.json({
-    name: 'TrustWise AI Backend',
-    version: '3.0.0',
-    status: 'running'
-  });
+  const { success } = require('./utils/response');
+  return success(res, { name: 'TrustWise AI Backend', version: '3.0.0', status: 'running' });
 });
 
 // Error handler
-app.use((err, req, res, next) => {
-  logger.error(`Error: ${err.message}`);
-  res.status(500).json({
-    success: false,
-    error: err.message
-  });
-});
+// Centralized error handler
+app.use(errorHandler);
 
-app.listen(PORT, () => {
-  logger.info(`🚀 TrustWise Backend running on http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    logger.info(`🚀 TrustWise Backend running on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;

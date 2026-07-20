@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "node test/codex-real-test.js",
+    "test": "jest --runInBand",
     "test:integration": "node test/tlsnotary-test.js"
   },
   "dependencies": {
@@ -19,6 +19,8 @@
     "winston": "^3.11.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.0.1",
+    "jest": "^29.0.0",
+    "supertest": "^6.3.0"
   }
 }

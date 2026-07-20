@@ -177,6 +177,20 @@ class TLSNotaryService {
 
     const totalLatency = Date.now() - startTime;
 
+    // If verification failed, attach a categorized error object
+    let verifierError = null;
+    if (verificationLevel === VERIFICATION_LEVELS.FAILED) {
+      if (!signatureResult.valid && !hashResult.valid) {
+        verifierError = { code: 'INVALID_SIGNATURE_AND_HASH', message: 'Signature and proof hash verification both failed.' };
+      } else if (!signatureResult.valid) {
+        verifierError = { code: 'INVALID_SIGNATURE', message: 'Cryptographic signature verification failed.' };
+      } else if (!hashResult.valid) {
+        verifierError = { code: 'PROOF_HASH_MISMATCH', message: 'Provided proof hash does not match computed content hash.' };
+      } else {
+        verifierError = { code: 'TLS_VERIFICATION_FAILED', message: 'Verification failed for unknown reasons.' };
+      }
+    }
+
     // Step 13: Build the verified result
     const result = {
       success: verificationLevel !== VERIFICATION_LEVELS.FAILED,
@@ -216,6 +230,11 @@ class TLSNotaryService {
       supported_domains: this.supportedDomains
     };
 
+    if (verifierError) {
+      result.error = verifierError;
+      result.verification_details.error = verifierError;
+    }
+
     logger.info(`✅ Verification complete: level=${verificationLevel}, status=${deliveryStatus}, source=${source}, quality=${evidenceQuality}, latency=${totalLatency}ms`);
     return result;
   }
@@ -226,33 +245,33 @@ class TLSNotaryService {
    */
   validateProof(proof) {
     if (!proof) {
-      return 'Proof data is required';
+      return { code: 'MALFORMED_PROOF', message: 'Proof data is required' };
     }
 
     if (typeof proof !== 'object') {
-      return 'Proof must be an object';
+      return { code: 'MALFORMED_PROOF', message: 'Proof must be an object' };
     }
 
     if (!proof.content && !proof.url) {
-      return 'Proof must contain either content or URL';
+      return { code: 'MALFORMED_PROOF', message: 'Proof must contain either content or URL' };
     }
 
     if (proof.content && typeof proof.content !== 'string') {
-      return 'Proof content must be a string';
+      return { code: 'MALFORMED_PROOF', message: 'Proof content must be a string' };
     }
 
     if (proof.url && typeof proof.url !== 'string') {
-      return 'Proof URL must be a string';
+      return { code: 'MALFORMED_PROOF', message: 'Proof URL must be a string' };
     }
 
     if (proof.url) {
       try {
         const url = new URL(proof.url);
         if (!['http:', 'https:'].includes(url.protocol)) {
-          return `Unsupported protocol: ${url.protocol}. Only http and https are allowed.`;
+          return { code: 'INVALID_PROOF_URL', message: `Unsupported protocol: ${url.protocol}. Only http and https are allowed.` };
         }
       } catch {
-        return 'Invalid URL format';
+        return { code: 'INVALID_PROOF_URL', message: 'Invalid URL format' };
       }
     }
 
@@ -263,11 +282,13 @@ class TLSNotaryService {
    * Create error result when validation fails
    */
   createErrorResult(error, startTime) {
+    const errObj = (typeof error === 'string') ? { code: 'TLS_VERIFICATION_FAILED', message: error } : (error || { code: 'TLS_VERIFICATION_FAILED', message: 'Verification failed' });
+
     return {
       success: false,
       verified: false,
       verification_level: VERIFICATION_LEVELS.FAILED,
-      error: error,
+      error: errObj,
       proof_hash: null,
       content_hash: null,
       delivery_status: 'Unknown',
@@ -286,7 +307,7 @@ class TLSNotaryService {
         has_url: false,
         has_timestamp: false,
         verification_level: VERIFICATION_LEVELS.FAILED,
-        error: error
+        error: errObj
       },
       latency_ms: {
         total: Date.now() - startTime

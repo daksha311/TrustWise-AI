@@ -55,7 +55,6 @@ class TrackingFetcher {
     if (!tracking || typeof tracking !== 'string') {
       return 'ups';
     }
-
     const trimmed = tracking.trim();
 
     for (const [carrier, config] of Object.entries(CARRIER_PATTERNS)) {
@@ -64,7 +63,7 @@ class TrackingFetcher {
       }
     }
 
-    return 'ups'; // Default to UPS for unknown formats
+    return null; // Unknown format
   }
 
   /**
@@ -84,7 +83,22 @@ class TrackingFetcher {
   async fetchTrackingPage(tracking) {
     const trimmed = tracking.trim();
     const carrier = this.detectCarrier(trimmed);
-    const url = this.buildTrackingUrl(carrier, trimmed);
+
+    // Validate basic tracking format before attempting fetch
+    if (!DEMO_TRACKING[trimmed] && !carrier) {
+      this.logger.warn(`Invalid tracking number format detected: ${trimmed}`);
+      return {
+        tracking: trimmed,
+        error: {
+          code: 'INVALID_TRACKING_NUMBER',
+          message: 'The provided tracking number format is invalid or unsupported.'
+        },
+        fetchedAt: new Date().toISOString()
+      };
+    }
+
+    const resolvedCarrier = carrier || (DEMO_TRACKING[trimmed] && DEMO_TRACKING[trimmed].carrier) || 'ups';
+    const url = this.buildTrackingUrl(resolvedCarrier, trimmed);
 
     // 1. Check for deterministic demo tracking entry first
     if (DEMO_TRACKING[trimmed]) {
@@ -148,7 +162,7 @@ class TrackingFetcher {
 
       return {
         tracking: trimmed,
-        carrier: carrier,
+        carrier: resolvedCarrier,
         status: status,
         date: date,
         tracking_display: trackingDisplay,
@@ -163,14 +177,17 @@ class TrackingFetcher {
 
       return {
         tracking: trimmed,
-        carrier: carrier,
+        carrier: resolvedCarrier,
         status: 'Unknown',
         date: new Date().toISOString().split('T')[0],
         tracking_display: trimmed,
         url: url,
         html: '',
         htmlLength: 0,
-        error: error.message,
+        error: {
+          code: 'CARRIER_UNAVAILABLE',
+          message: error.message || 'Failed to fetch carrier tracking page'
+        },
         fetchedAt: new Date().toISOString()
       };
     }
@@ -276,12 +293,14 @@ class TrackingFetcher {
     const data = await this.fetchTrackingPage(tracking);
 
     // Step 2: Fail gracefully if status is Unknown, fetch error, or missing page HTML
-    if (data.status === 'Unknown' || data.error || !data.html) {
-      this.logger.warn(`⚠️ Cannot generate proof for tracking ID "${tracking}": Carrier webpage unavailable or status unknown.`);
+    if (data.error || data.status === 'Unknown' || !data.html) {
+      this.logger.warn(`⚠️ Cannot generate proof for tracking ID "${tracking}": Carrier webpage unavailable or status unknown. (${JSON.stringify(data.error || {})})`);
+      const code = data.error && data.error.code ? data.error.code : 'TRACKING_PAGE_UNAVAILABLE';
+      const message = data.error && data.error.message ? data.error.message : 'Unable to extract tracking information because the carrier website requires JavaScript rendering or anti-bot verification.';
       return {
         success: false,
-        error: 'TRACKING_PAGE_UNAVAILABLE',
-        message: 'Unable to extract tracking information because the carrier website requires JavaScript rendering or anti-bot verification.'
+        error: code,
+        message: message
       };
     }
 

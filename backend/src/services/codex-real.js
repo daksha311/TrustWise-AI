@@ -41,13 +41,17 @@ class CodexArbitrationService {
     this.cacheCleanupInterval = setInterval(() => this.cleanCache(), 5 * 60 * 1000);
     this.cacheCleanupInterval.unref();
     
-    this.validateApiKey();
-
-    // Initialize OpenAI client pointing to the GitHub Models inference endpoint
-    this.client = new OpenAI({
-      apiKey: this.apiKey,
-      baseURL: this.apiUrl
-    });
+    // Validate API key; if missing, enable mockMode for local development / token-bypass
+    this.mockMode = false;
+    try {
+      this.validateApiKey();
+      this.client = new OpenAI({ apiKey: this.apiKey, baseURL: this.apiUrl });
+    } catch (e) {
+      // Enable mock mode rather than throwing so the server can run without a token
+      this.mockMode = true;
+      logger.warn('⚠️ GITHUB_TOKEN missing or invalid: running Codex arbitration in mock mode (token-bypass enabled)');
+      this.client = null;
+    }
   }
 
   /**
@@ -55,7 +59,7 @@ class CodexArbitrationService {
    */
   validateApiKey() {
     if (!this.apiKey || this.apiKey === '' || this.apiKey.includes('your-')) {
-      throw new Error('❌ GITHUB_TOKEN is missing or invalid. Please add it to .env');
+      throw new Error('❌ GITHUB_TOKEN is missing or invalid.');
     }
     logger.info('🔑 GitHub Models API Token: ✅ Configured');
     logger.info(`📡 API Endpoint: ${this.apiUrl}`);
@@ -193,28 +197,29 @@ class CodexArbitrationService {
   buildSystemPrompt() {
     return `You are the arbitration engine for TrustWise AI.
 
-## ⚠️ CRITICAL RULES:
-- Facts from zkTLS are absolute.
-- If user claims conflict with verified evidence, ALWAYS prefer verified evidence.
-- Claims are allegations. Never infer missing facts.
-- Never speculate. Evidence has priority over all claims.
-- Never contradict verified evidence.
-- Never invent facts.
-- If both parties lack sufficient evidence, return "need_more_evidence".
-- Return valid JSON only. No markdown, no extra text.
-- Confidence MUST be an integer between 0-100. Never output decimals.
+  ## ⚠️ CRITICAL RULES:
+  - Use ONLY the verified evidence provided in the "Verified Evidence" section. Do NOT consult external sources, APIs, or unstated knowledge.
+  - Facts from zkTLS are absolute.
+  - If user claims conflict with verified evidence, ALWAYS prefer verified evidence.
+  - Claims are allegations. Never infer missing facts.
+  - Never speculate. Evidence has priority over all claims.
+  - Never contradict verified evidence.
+  - Never invent facts.
+  - If both parties lack sufficient evidence, return "need_more_evidence".
+  - Return valid JSON only. No markdown, no extra text.
+  - Confidence MUST be an integer between 0-100. Never output decimals.
 
-## 🎯 Action Mapping:
-- release_funds → Funds go to seller
-- refund_buyer → Funds returned to buyer
-- split_payment → Funds split 50/50
-- need_more_evidence → Insufficient evidence, request additional proof
+  ## 🎯 Action Mapping:
+  - release_funds → Funds go to seller
+  - refund_buyer → Funds returned to buyer
+  - split_payment → Funds split 50/50
+  - need_more_evidence → Insufficient evidence, request additional proof
 
-## 📊 Confidence Scale (integer 0-100):
-- 90-100: Evidence is clear and unambiguous
-- 70-89: Evidence is strong but with minor ambiguity
-- 50-69: Evidence is mixed or unclear
-- Below 50: Evidence is weak or insufficient`;
+  ## 📊 Confidence Scale (integer 0-100):
+  - 90-100: Evidence is clear and unambiguous
+  - 70-89: Evidence is strong but with minor ambiguity
+  - 50-69: Evidence is mixed or unclear
+  - Below 50: Evidence is weak or insufficient`;
   }
 
   /**
@@ -385,6 +390,10 @@ ${JSON.stringify(essential, null, 2)}`;
     const startTime = Date.now();
     
     logger.info(`⚖️ Starting single ${this.modelName} arbitration via GitHub Models...`);
+    // Testing hook: allow forcing an AI service failure for integration tests
+    if (escrowContext && escrowContext.escrow_id === 'FORCE_AI_FAIL') {
+      throw new Error('Simulated AI provider timeout');
+    }
 
     this.validateInputs(verifiedEvidence, buyerClaim, sellerClaim, escrowContext);
     const cacheKey = this.generateCacheKey(verifiedEvidence, buyerClaim, sellerClaim, escrowContext);
@@ -417,10 +426,23 @@ ${JSON.stringify(essential, null, 2)}`;
 
     logger.info(`📝 Prompt size: ${promptSize} chars | Evidence size: ${evidenceSize} chars`);
 
-    const requestPromise = this.callArbitrationAPI(prompt, evidenceSize, promptSize);
-    this.pendingRequests.set(cacheKey, requestPromise);
+    let requestPromise = null;
+    if (!this.mockMode) {
+      requestPromise = this.callArbitrationAPI(prompt, evidenceSize, promptSize);
+      this.pendingRequests.set(cacheKey, requestPromise);
+    }
 
     try {
+      // If in mock mode, bypass external API and compute deterministic result
+      if (this.mockMode) {
+        logger.info('🤖 Mock arbitration mode: computing deterministic response without external API');
+        const mockResult = this.computeMockArbitration(verifiedEvidence, buyerClaim, sellerClaim, escrowContext);
+        this.cache.set(cacheKey, { data: mockResult, createdAt: Date.now() });
+        const elapsed = Date.now() - startTime;
+        logger.info(`✅ Mock arbitration complete: ${mockResult.action} (${mockResult.confidence}% confidence) in ${elapsed}ms`);
+        return mockResult;
+      }
+
       const result = await requestPromise;
       
       this.cache.set(cacheKey, {
@@ -532,6 +554,47 @@ ${JSON.stringify(essential, null, 2)}`;
         throw error;
       }
     }
+  }
+
+  /**
+   * Deterministic mock arbitration used when API token is not configured.
+   * Returns the same schema as a real arbitration result.
+   */
+  computeMockArbitration(verifiedEvidence, buyerClaim, sellerClaim, escrowContext) {
+    // Simple heuristics: if delivery confirmed, favor seller; if not delivered, favor buyer
+    const status = (verifiedEvidence.delivery_status || '').toLowerCase();
+    let action = 'need_more_evidence';
+    let confidence = 50;
+    let key_evidence = [];
+
+    if (status.includes('delivered') || status === 'delivered') {
+      action = 'release_funds';
+      confidence = 90;
+      key_evidence.push('Verified zkTLS proof indicates delivery');
+    } else if (status.includes('not delivered') || status.includes('failed') || status.includes('returned')) {
+      action = 'refund_buyer';
+      confidence = 90;
+      key_evidence.push('Verified zkTLS proof indicates non-delivery');
+    } else if (verifiedEvidence.quality_score && verifiedEvidence.quality_score > 75) {
+      action = 'release_funds';
+      confidence = 80;
+      key_evidence.push('High-quality evidence score');
+    } else {
+      action = 'need_more_evidence';
+      confidence = 40;
+      key_evidence.push('Insufficient verified evidence');
+    }
+
+    return {
+      action: action,
+      confidence: confidence,
+      reasoning: `Mock arbitration based on delivery_status='${verifiedEvidence.delivery_status}' and quality_score=${verifiedEvidence.quality_score || 'N/A'}`,
+      explanation: action === 'need_more_evidence' ? 'Not enough verified evidence to make a decision.' : (action === 'release_funds' ? 'Evidence supports release to seller.' : 'Evidence supports refund to buyer.'),
+      key_evidence: key_evidence,
+      risk_score: action === 'need_more_evidence' ? 50 : 10,
+      timestamp: new Date().toISOString(),
+      usage: { mocked: true }
+    };
   }
 }
 
