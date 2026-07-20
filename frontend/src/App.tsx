@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { connectWallet, getEscrowContract } from './web3Service';
 import { ethers } from 'ethers';
@@ -9,7 +9,7 @@ import CreateEscrow from './pages/CreateEscrow';
 import DisputeView from './pages/DisputeView';
 import History from './pages/History';
 
-// 1. Re-added Binary Matrix Rain Canvas Component
+// Binary Matrix Rain Canvas Component
 function BinaryRainBackground() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -84,8 +84,35 @@ export default function App() {
 
   const [sellerAddress, setSellerAddress] = useState<string>("");
   const [depositAmount, setDepositAmount] = useState<string>("");
-  const [targetEscrowId, setTargetEscrowId] = useState<string>("");
-  const [aiVerdict, setAiVerdict] = useState<string>("Compliance metrics verified.");
+
+  // 1. Lifted fetchContractData to top-level scope using useCallback
+  const fetchContractData = useCallback(async () => {
+    if (!walletAddress) return;
+    try {
+      setStatusMessage("⏳ Querying smart contract state...");
+      const contract = await getEscrowContract();
+      const contractTarget = await contract.getAddress();
+      
+      let totalEscrows = "0";
+      try {
+        const counter = await contract.escrowCounter();
+        totalEscrows = counter.toString();
+      } catch (e) {
+        console.log("Counter read exception, defaulting layout map.");
+      }
+      
+      setContractDetails(`Live at: ${contractTarget.substring(0, 6)}... | Total: ${totalEscrows}`);
+      setStatusMessage("🟢 Contract handshake completed successfully.");
+    } catch (error: any) {
+      setContractDetails("Error Interfacing Registry");
+      setStatusMessage(`⚠️ Registry sync block: ${error.message}`);
+    }
+  }, [walletAddress]);
+
+  // 2. Fetch contract parameters when walletAddress updates
+  useEffect(() => {
+    fetchContractData();
+  }, [walletAddress, fetchContractData]);
 
   const handleConnect = async () => {
     try {
@@ -100,32 +127,6 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
-    const fetchContractData = async () => {
-      if (!walletAddress) return;
-      try {
-        setStatusMessage("⏳ Querying smart contract state...");
-        const contract = await getEscrowContract();
-        const contractTarget = await contract.getAddress();
-        
-        let totalEscrows = "0";
-        try {
-          const counter = await contract.escrowCounter();
-          totalEscrows = counter.toString();
-        } catch (e) {
-          console.log("Counter read exception, defaulting layout map.");
-        }
-        
-        setContractDetails(`Live at: ${contractTarget.substring(0, 6)}... | Total: ${totalEscrows}`);
-        setStatusMessage("🟢 Contract handshake completed successfully.");
-      } catch (error: any) {
-        setContractDetails("Error Interfacing Registry");
-        setStatusMessage(`⚠️ Registry sync block: ${error.message}`);
-      }
-    };
-    fetchContractData();
-  }, [walletAddress]);
-
   const handleCreateEscrow = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sellerAddress || !depositAmount) {
@@ -136,32 +137,19 @@ export default function App() {
       setIsLoading(true);
       setStatusMessage("⏳ Broadcasting transaction execution matrix to Sepolia...");
       const contract = await getEscrowContract();
-      const tx = await contract.createEscrow(sellerAddress, { value: ethers.parseEther(depositAmount) });
+      
+      // 👇 ADDED gasLimit HERE TO BYPASS RPC ESTIMATION
+      const tx = await contract.createEscrow(sellerAddress, { 
+        value: ethers.parseEther(depositAmount),
+        gasLimit: 300000 
+      });
+
       setStatusMessage("🚀 Transaction broadcasted! Awaiting block confirmation...");
       const receipt = await tx.wait();
       setStatusMessage(`💥 Escrow Vault Initialized! Hash: ${receipt.hash}`);
+      fetchContractData();
     } catch (error: any) {
       setStatusMessage(`❌ Transaction failed: ${error.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleReleaseFunds = async () => {
-    if (!targetEscrowId) {
-      setStatusMessage("❌ Explicit Target Escrow ID index required for settlement.");
-      return;
-    }
-    try {
-      setIsLoading(true);
-      setStatusMessage(`⏳ Dispatching release request for ID Vector: ${targetEscrowId}...`);
-      const contract = await getEscrowContract();
-      const tx = await contract.releaseFunds(Number(targetEscrowId), aiVerdict);
-      setStatusMessage("🚀 Release authorization broadcasted! Confirming...");
-      await tx.wait();
-      setStatusMessage(`✅ Escrow ID ${targetEscrowId} successfully settled.`);
-    } catch (error: any) {
-      setStatusMessage(`❌ Release protocol failed: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -171,7 +159,6 @@ export default function App() {
     <BrowserRouter>
       <div style={{ padding: '60px 20px', fontFamily: '"Fira Code", monospace, sans-serif', backgroundColor: '#000000', color: '#ffffff', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
         
-        {/* 2. Mounted Canvas Element Layer */}
         <BinaryRainBackground />
 
         <header style={{ textAlign: 'center', marginBottom: '30px', zIndex: 3 }}>
@@ -229,10 +216,42 @@ export default function App() {
             </div>
           ) : (
             <Routes>
-              <Route path="/" element={<Dashboard walletAddress={walletAddress} contractDetails={contractDetails} statusMessage={statusMessage} />} />
-              <Route path="/create" element={<CreateEscrow sellerAddress={sellerAddress} setSellerAddress={setSellerAddress} depositAmount={depositAmount} setDepositAmount={setDepositAmount} handleCreateEscrow={handleCreateEscrow} isLoading={isLoading} statusMessage={statusMessage} />} />
-              <Route path="/dispute" element={<DisputeView targetEscrowId={targetEscrowId} setTargetEscrowId={setTargetEscrowId} aiVerdict={aiVerdict} setAiVerdict={setAiVerdict} handleReleaseFunds={handleReleaseFunds} isLoading={isLoading} statusMessage={statusMessage} />} />
-              <Route path="/history" element={<History />} />
+              <Route 
+                path="/" 
+                element={
+                  <Dashboard 
+                    walletAddress={walletAddress} 
+                    contractDetails={contractDetails} 
+                    statusMessage={statusMessage} 
+                  />
+                } 
+              />
+              <Route 
+                path="/create" 
+                element={
+                  <CreateEscrow 
+                    sellerAddress={sellerAddress} 
+                    setSellerAddress={setSellerAddress} 
+                    depositAmount={depositAmount} 
+                    setDepositAmount={setDepositAmount} 
+                    handleCreateEscrow={handleCreateEscrow} 
+                    isLoading={isLoading} 
+                    statusMessage={statusMessage} 
+                  />
+                } 
+              />
+              <Route 
+                path="/dispute" 
+                element={
+                  <DisputeView 
+                    onTransactionComplete={fetchContractData} 
+                  />
+                } 
+              />
+              <Route 
+                path="/history" 
+                element={<History />} 
+              />
             </Routes>
           )}
         </main>
