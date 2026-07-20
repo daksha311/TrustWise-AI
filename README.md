@@ -248,9 +248,8 @@ struct EscrowTransaction {
 
 ## 👥 Team NULL POINTERS
 
-* **Harsha K** — Smart Contracts & Frontend Web3 Architecture
-* **Chennamraju Vaishnavi** — AI Arbitration Pipeline & Backend Service
-* **D Harikrishnan** — zkTLS Proof Integration & Data Systems
+* **Harsha K** — Frontend and Block chain
+* **Daksha SG** — Backend
 
 ---
 
