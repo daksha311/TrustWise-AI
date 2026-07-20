@@ -1,13 +1,80 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { connectWallet, getEscrowContract } from './web3Service';
 import { ethers } from 'ethers';
 
-// Import newly structured views
+// Import views
 import Dashboard from './pages/Dashboard';
 import CreateEscrow from './pages/CreateEscrow';
 import DisputeView from './pages/DisputeView';
 import History from './pages/History';
+
+// 1. Re-added Binary Matrix Rain Canvas Component
+function BinaryRainBackground() {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const binaryUnits = "01";
+    const fontSize = 14;
+    const columns = canvas.width / fontSize;
+    const rainDrops = Array.from({ length: columns }).fill(1) as number[];
+
+    const draw = () => {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#00ff00';
+      ctx.font = fontSize + 'px monospace';
+
+      for (let i = 0; i < rainDrops.length; i++) {
+        const text = binaryUnits.charAt(Math.floor(Math.random() * binaryUnits.length));
+        ctx.fillText(text, i * fontSize, rainDrops[i] * fontSize);
+
+        if (rainDrops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+          rainDrops[i] = 0;
+        }
+        rainDrops[i]++;
+      }
+    };
+
+    const interval = setInterval(draw, 33);
+    
+    const handleResize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  return (
+    <canvas 
+      ref={canvasRef} 
+      style={{ 
+        position: 'fixed', 
+        top: 0, 
+        left: 0, 
+        width: '100%', 
+        height: '100%', 
+        zIndex: 0, 
+        backgroundColor: '#000000', 
+        pointerEvents: 'none' 
+      }} 
+    />
+  );
+}
 
 export default function App() {
   const [walletAddress, setWalletAddress] = useState<string>("");
@@ -102,16 +169,18 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <div style={{ padding: '60px 20px', fontFamily: '"Fira Code", monospace, sans-serif', backgroundColor: '#000000', color: '#ffffff', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div style={{ padding: '60px 20px', fontFamily: '"Fira Code", monospace, sans-serif', backgroundColor: '#000000', color: '#ffffff', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
         
-        <header style={{ textAlign: 'center', marginBottom: '30px' }}>
+        {/* 2. Mounted Canvas Element Layer */}
+        <BinaryRainBackground />
+
+        <header style={{ textAlign: 'center', marginBottom: '30px', zIndex: 3 }}>
           <h1 style={{ color: '#00ff00', fontSize: '2.5rem', fontWeight: 800, margin: '0 0 10px 0', letterSpacing: '1px', textShadow: '0 0 10px rgba(0,255,0,0.4)' }}>TRUSTWISE.AI</h1>
           <p style={{ color: '#666666', fontSize: '1rem', margin: 0 }}>Decentralized Escrow Architecture & Autonomous Arbitration Matrix</p>
         </header>
 
-        {/* Dynamic Route Navigation Controls Menu */}
         {walletAddress && (
-          <nav style={{ display: 'flex', gap: '16px', marginBottom: '40px', paddingBottom: '15px', justifyContent: 'center', wrap: 'wrap' }}>
+          <nav style={{ display: 'flex', gap: '16px', marginBottom: '40px', paddingBottom: '15px', justifyContent: 'center', flexWrap: 'wrap', zIndex: 3 }}>
             {[
               { path: "/", label: "DASHBOARD" },
               { path: "/create", label: "INITIALIZE ESCROW" },
@@ -150,7 +219,7 @@ export default function App() {
           </nav>
         )}
 
-        <main style={{ width: '100%', maxWidth: '700px', background: 'rgba(0, 0, 0, 0.9)', border: '2px solid #00ff00', padding: '40px', borderRadius: '12px', boxShadow: '0 0 30px rgba(0, 255, 0, 0.2)' }}>
+        <main style={{ width: '100%', maxWidth: '700px', background: 'rgba(0, 0, 0, 0.9)', border: '2px solid #00ff00', padding: '40px', borderRadius: '12px', boxShadow: '0 0 30px rgba(0, 255, 0, 0.2)', zIndex: 3 }}>
           {!walletAddress ? (
             <div style={{ textAlign: 'center', padding: '40px 20px' }}>
               <p style={{ color: '#888888', fontSize: '1rem', marginBottom: '28px' }}>Secure Gateway Locked. Initialize link to proceed.</p>
