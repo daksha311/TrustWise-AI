@@ -1,4 +1,4 @@
-export const CONTRACT_ADDRESS = "0x044C91c465a1bA5a9C734459C828c36746A048A3";
+export const CONTRACT_ADDRESS = "0x66B4932b5430b41622d1EeF2736DD17F5A98E8c2";
 
 // Import the ABI we copied
 import EscrowABI from "./contracts/Escrow.json";

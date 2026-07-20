@@ -5,27 +5,51 @@ declare global {
 }
 
 import { ethers } from "ethers";
-import { CONTRACT_ADDRESS, CONTRACT_ABI } from "./config";
+import EscrowABI from "./contracts/Escrow.json";
 
-// 1. Request wallet connection from the browser extension
-export const connectWallet = async () => {
+const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || "0x66b4932b5430b41622d1eef2736dd17f5a98e8c2";
+
+export async function connectWallet() {
   if (!window.ethereum) {
-    throw new Error("MetaMask is not installed! Please install the extension.");
+    throw new Error("MetaMask is not installed!");
   }
-  
-  // Request account access
-  const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-  return accounts[0]; // Returns the active public key address
-};
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  const accounts = await provider.send("eth_requestAccounts", []);
+  return accounts[0];
+}
 
-// 2. Instantiate a writable contract instance
-export const getEscrowContract = async () => {
-  if (!window.ethereum) throw new Error("No crypto wallet found.");
+export async function getEscrowContract() {
+  if (!window.ethereum) {
+    throw new Error("MetaMask is not installed!");
+  }
 
-  // Wrap the native window provider with Ethers v6 structure
+  try {
+    await window.ethereum.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: "0xaa36a7" }],
+    });
+  } catch (switchError: any) {
+    if (switchError.code === 4902) {
+      await window.ethereum.request({
+        method: "wallet_addEthereumChain",
+        params: [
+          {
+            chainId: "0xaa36a7",
+            chainName: "Sepolia Test Network",
+            nativeCurrency: { name: "Sepolia ETH", symbol: "ETH", decimals: 18 },
+            rpcUrls: ["https://rpc.sepolia.org"],
+            blockExplorerUrls: ["https://sepolia.etherscan.io"],
+          },
+        ],
+      });
+    } else {
+      throw switchError;
+    }
+  }
+
   const provider = new ethers.BrowserProvider(window.ethereum);
   const signer = await provider.getSigner();
-  
-  // Create the read/write contract connector
-  return new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
-};
+  const abi = EscrowABI.abi || EscrowABI;
+
+  return new ethers.Contract(CONTRACT_ADDRESS, abi, signer);
+}
