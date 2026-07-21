@@ -144,6 +144,184 @@ struct EscrowTransaction {
 
 ---
 
+## 🤖 AI & Backend Architecture
+
+The TrustWise AI backend serves as the orchestration layer that connects cryptographic verification, AI reasoning, and blockchain settlement into a single autonomous dispute resolution pipeline.
+
+Unlike traditional escrow systems that rely on manually uploaded screenshots or documents, TrustWise AI automatically retrieves shipment information, verifies its authenticity using TLSNotary, and forwards only authenticated evidence to the AI arbitration engine.
+
+The backend is responsible for:
+
+- Request validation and structured API handling
+- Automatic shipment tracking retrieval
+- TLSNotary proof generation
+- Cryptographic proof verification
+- AI-powered dispute arbitration
+- Blockchain settlement coordination
+- Centralized logging and error handling
+- Automated integration testing
+
+This architecture ensures that AI decisions are always grounded in verifiable evidence before any blockchain transaction is executed.
+
+## 🔐 Backend Request Pipeline
+
+```text
+Buyer / Seller
+        │
+        ▼
+Frontend (React)
+        │
+        ▼
+Express REST API
+        │
+        ▼
+Tracking Number
+        │
+        ▼
+Tracking Fetcher
+        │
+        ▼
+TLSNotary Proof Generation
+        │
+        ▼
+Rust TLSNotary Verifier
+        │
+        ▼
+Verified Shipment Metadata
+        │
+        ▼
+GPT-4o (GitHub Models)
+        │
+        ▼
+Structured Arbitration Decision
+        │
+        ▼
+Ethereum Smart Contract
+        │
+        ▼
+MetaMask Settlement
+```
+
+## 🧠 GPT-4o Arbitration Engine
+
+TrustWise AI uses **GPT-4o through GitHub Models** as its dispute arbitration engine.
+
+Rather than allowing the language model to reason over potentially manipulated screenshots or manually submitted evidence, GPT-4o only receives cryptographically verified shipment information produced by the TLSNotary verification pipeline.
+
+The arbitration prompt includes:
+
+- Buyer statement
+- Seller statement
+- Verified shipment status
+- Shipment metadata
+- Transaction context
+- Escrow information
+
+The model produces structured JSON containing:
+
+- Recommended settlement action
+- Confidence score
+- Supporting evidence
+- Detailed reasoning
+- Human-readable explanation
+
+The backend validates the response before forwarding it to the frontend or triggering blockchain settlement.
+
+## 🔒 TLSNotary Integration
+
+TrustWise AI integrates a Rust-based TLSNotary verifier to eliminate reliance on manually submitted evidence.
+
+Instead of asking users to upload screenshots, the backend automatically generates TLS proofs directly from shipment tracking information.
+
+Every proof is validated for:
+
+- TLS transcript integrity
+- Response authenticity
+- Cryptographic signatures
+- Supported hash algorithms
+- Domain verification
+
+Only successfully verified responses are passed to the AI arbitration engine.
+
+This ensures that GPT-4o makes decisions using authentic, tamper-resistant evidence.
+## ⚙ Backend Engineering
+
+The backend was developed using Node.js and Express.js with an emphasis on reliability and maintainability.
+
+Key engineering features include:
+
+- Structured REST APIs
+- Request validation
+- Centralized error handling
+- Standardized API responses
+- Middleware-based logging
+- Retry mechanisms
+- Integration testing
+- Mock AI mode for development
+- Automated proof generation
+- Backend health monitoring
+
+These engineering practices helped create a reliable dispute resolution pipeline suitable for real-world workflows.
+
+## 🤖 OpenAI Development Workflow
+
+OpenAI tools played an important role throughout the engineering lifecycle of TrustWise AI.
+
+### GPT-4o (GitHub Models)
+
+GPT-4o serves as the production AI arbitration engine.
+
+Its responsibilities include:
+
+- Evaluating buyer and seller claims
+- Interpreting verified shipment evidence
+- Producing structured arbitration decisions
+- Generating explainable reasoning
+- Returning confidence scores for each decision
+
+GPT-4o operates only after TLSNotary verification has confirmed that the shipment information is authentic.
+
+---
+
+### OpenAI Codex
+
+OpenAI Codex significantly accelerated software development throughout the project.
+
+We used Codex to assist with:
+
+- Backend implementation
+- Smart contract integration
+- MetaMask connectivity
+- Express API development
+- TLSNotary integration
+- Smart contract interaction using Ethers.js
+- Automated testing with Jest and Supertest
+- Refactoring and debugging
+- End-to-end integration
+- Documentation improvements
+
+Codex acted as an engineering collaborator, enabling faster iteration while maintaining code quality across JavaScript, Rust, Solidity, and TypeScript components.
+
+---
+
+### GPT-5.6
+
+GPT-5.6 was used as an engineering assistant during development.
+
+It helped with:
+
+- Backend architecture planning
+- API design
+- Prompt engineering
+- System design discussions
+- Backend debugging
+- Code review
+- Integration strategy
+- Documentation
+- Development planning
+
+While GPT-5.6 accelerated engineering decisions during development, the deployed dispute resolution engine itself runs on GPT-4o through GitHub Models.
+
 ## 🚦 Getting Started
 
 ### Prerequisites
