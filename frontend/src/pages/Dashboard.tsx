@@ -1,12 +1,20 @@
-import React from 'react';
-
 interface DashboardProps {
   walletAddress: string;
   contractDetails: string;
   statusMessage: string;
+  totalEscrows: number;
+  activeVaults: number;
+  disputedAssets: number;
 }
 
-export default function Dashboard({ walletAddress, contractDetails, statusMessage }: DashboardProps) {
+export default function Dashboard({
+  walletAddress,
+  contractDetails,
+  statusMessage,
+  totalEscrows,
+  activeVaults,
+  disputedAssets,
+}: DashboardProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -21,12 +29,11 @@ export default function Dashboard({ walletAddress, contractDetails, statusMessag
         </div>
       </div>
 
-      {/* Aggregate Statistics Overview Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px' }}>
         {[
-          { label: "Total Escrows", val: contractDetails.includes("Total:") ? contractDetails.split("Total:")[1].trim() : "0", color: "#00ff00" },
-          { label: "Active Vaults", val: "0", color: "#38bdf8" },
-          { label: "Disputed Assets", val: "0", color: "#f43f5e" },
+          { label: "Total Escrows", val: String(totalEscrows), color: "#00ff00" },
+          { label: "Active Vaults", val: String(activeVaults), color: "#38bdf8" },
+          { label: "Disputed Assets", val: String(disputedAssets), color: "#f43f5e" },
         ].map((stat, idx) => (
           <div key={idx} style={{ border: '1px solid #222222', padding: '16px', borderRadius: '6px', textAlign: 'center' }}>
             <span style={{ color: '#666666', display: 'block', fontSize: '0.75rem', marginBottom: '4px' }}>{stat.label}</span>

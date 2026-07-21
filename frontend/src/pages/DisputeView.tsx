@@ -4,13 +4,13 @@ import type { DisputePayload, AIVerdictResponse } from '../utils/api';
 import { getEscrowContract } from '../web3Service';
 
 interface DisputeViewProps {
-  onTransactionComplete?: () => void; // Trigger for refreshing UI stats
+  onTransactionComplete?: () => void;
 }
 
 export default function DisputeView({ onTransactionComplete }: DisputeViewProps) {
-  // Form State Vectors
   const [formData, setFormData] = useState<DisputePayload>({
-    trackingNumber: "TRK-982143",
+    // Demo UPS tracking number accepted by backend TrackingFetcher
+    trackingNumber: "1Z12345E0205271688",
     disputeId: "DSP-001",
     escrowId: "0",
     buyer: "",
@@ -25,11 +25,13 @@ export default function DisputeView({ onTransactionComplete }: DisputeViewProps)
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [isExecutingTx, setIsExecutingTx] = useState<boolean>(false);
 
+  const canSettleOnChain =
+    aiResult?.action === "release" || aiResult?.action === "refund";
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // Task 1: Connect Dispute Page -> Backend API
   const handleResolveDispute = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsAnalyzing(true);
@@ -39,7 +41,9 @@ export default function DisputeView({ onTransactionComplete }: DisputeViewProps)
     try {
       const result = await resolveDisputeAPI(formData);
       setAiResult(result);
-      setStatusMessage("🟢 AI Arbitration complete. Review verdict below.");
+      setStatusMessage(
+        `🟢 AI Arbitration complete — verdict: ${result.decision}`
+      );
     } catch (error: any) {
       setStatusMessage(`❌ AI Resolution Error: ${error.message}`);
     } finally {
@@ -47,33 +51,36 @@ export default function DisputeView({ onTransactionComplete }: DisputeViewProps)
     }
   };
 
-  // Task 3: Execute Smart Contract (releaseFunds vs refundFunds)
   const handleExecuteContract = async () => {
-    if (!aiResult) return;
+    if (!aiResult || !canSettleOnChain) return;
+
+    const methodName = aiResult.action === "release" ? "releaseFunds" : "refundFunds";
     setIsExecutingTx(true);
-    setStatusMessage(`⏳ Dispatching ${aiResult.action === 'release' ? 'releaseFunds' : 'refundFunds'} transaction via MetaMask...`);
+    setStatusMessage(`⏳ Dispatching ${methodName}() via MetaMask on Sepolia...`);
 
     try {
       const contract = await getEscrowContract();
-      let tx;
+      const escrowId = Number(formData.escrowId);
+      const verdictText = aiResult.reasoning || aiResult.decision;
 
-      if (aiResult.action === "release") {
-        tx = await contract.releaseFunds(Number(formData.escrowId), aiResult.reasoning);
-      } else {
-        tx = await contract.refundFunds(Number(formData.escrowId), aiResult.reasoning);
-      }
+      const tx =
+        aiResult.action === "release"
+          ? await contract.releaseFunds(escrowId, verdictText)
+          : await contract.refundFunds(escrowId, verdictText);
 
-      setStatusMessage("🚀 Transaction broadcasted to Sepolia! Awaiting block confirmation...");
+      setStatusMessage("🚀 Settlement broadcasted to Sepolia — awaiting block confirmation...");
       const receipt = await tx.wait();
 
-      setStatusMessage(`💥 Settlement Finalized! Block Hash: ${receipt.hash.substring(0, 10)}...`);
+      setStatusMessage(
+        `💥 Settlement finalized (${aiResult.action === "release" ? "RELEASE" : "REFUND"}). Tx: ${receipt.hash}`
+      );
 
-      // Task 4: Refresh UI Callback
       if (onTransactionComplete) {
         onTransactionComplete();
       }
     } catch (error: any) {
-      setStatusMessage(`❌ Smart Contract Execution Error: ${error.message}`);
+      const msg = error?.reason || error?.shortMessage || error?.message || "Unknown error";
+      setStatusMessage(`❌ Smart Contract Execution Error: ${msg}`);
     } finally {
       setIsExecutingTx(false);
     }
@@ -81,13 +88,11 @@ export default function DisputeView({ onTransactionComplete }: DisputeViewProps)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-      
-      {/* Evidence & Dispute Submission Form */}
       <div style={{ border: '1px solid #222222', padding: '24px', borderRadius: '8px', background: '#000000' }}>
         <h3 style={{ color: '#00ff00', fontSize: '1.1rem', marginTop: 0, marginBottom: '20px' }}>
           [02] ARBITRATION RESOLUTION FORM
         </h3>
-        
+
         <form onSubmit={handleResolveDispute} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div>
             <label style={{ display: 'block', color: '#888888', fontSize: '0.8rem', marginBottom: '4px' }}>Escrow ID Index</label>
@@ -122,20 +127,20 @@ export default function DisputeView({ onTransactionComplete }: DisputeViewProps)
             <textarea name="sellerClaim" value={formData.sellerClaim} onChange={handleChange} rows={2} style={inputStyle} required />
           </div>
 
-          <button 
-            type="submit" 
-            disabled={isAnalyzing} 
-            style={{ 
-              gridColumn: 'span 2', 
-              backgroundColor: 'transparent', 
-              color: '#00ff00', 
-              border: '1px solid #00ff00', 
-              padding: '14px', 
-              borderRadius: '4px', 
-              cursor: 'pointer', 
-              fontWeight: 600, 
-              fontSize: '0.95rem', 
-              textTransform: 'uppercase' 
+          <button
+            type="submit"
+            disabled={isAnalyzing}
+            style={{
+              gridColumn: 'span 2',
+              backgroundColor: 'transparent',
+              color: '#00ff00',
+              border: '1px solid #00ff00',
+              padding: '14px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '0.95rem',
+              textTransform: 'uppercase'
             }}
           >
             {isAnalyzing ? "ANALYZING EVIDENCE MATRIX..." : "RESOLVE DISPUTE WITH AI"}
@@ -143,7 +148,6 @@ export default function DisputeView({ onTransactionComplete }: DisputeViewProps)
         </form>
       </div>
 
-      {/* Task 2: AI Verdict Panel Component */}
       {aiResult && (
         <div style={{ border: '2px solid #00ff00', padding: '24px', borderRadius: '8px', background: 'rgba(0, 255, 0, 0.02)', boxShadow: '0 0 15px rgba(0, 255, 0, 0.15)' }}>
           <h3 style={{ color: '#00ff00', fontSize: '1.2rem', marginTop: 0, marginBottom: '16px', display: 'flex', justifyContent: 'space-between' }}>
@@ -165,9 +169,13 @@ export default function DisputeView({ onTransactionComplete }: DisputeViewProps)
           <div style={{ marginBottom: '16px' }}>
             <span style={{ color: '#888888', fontSize: '0.8rem', display: 'block', marginBottom: '6px' }}>EVIDENCE</span>
             <ul style={{ margin: 0, paddingLeft: '20px', color: '#00ff00', fontSize: '0.9rem', listStyleType: 'square' }}>
-              {aiResult.evidence?.map((item, idx) => (
-                <li key={idx} style={{ marginBottom: '4px' }}>{item}</li>
-              ))}
+              {aiResult.evidence?.length ? (
+                aiResult.evidence.map((item, idx) => (
+                  <li key={idx} style={{ marginBottom: '4px' }}>{item}</li>
+                ))
+              ) : (
+                <li style={{ color: '#666666' }}>No key evidence returned</li>
+              )}
             </ul>
           </div>
 
@@ -178,26 +186,34 @@ export default function DisputeView({ onTransactionComplete }: DisputeViewProps)
             </p>
           </div>
 
-          <button 
-            type="button" 
-            onClick={handleExecuteContract} 
-            disabled={isExecutingTx} 
-            style={{ 
-              width: '100%', 
-              backgroundColor: aiResult.action === 'release' ? 'rgba(0, 255, 0, 0.15)' : 'rgba(244, 63, 94, 0.15)', 
-              color: aiResult.action === 'release' ? '#00ff00' : '#f43f5e', 
-              border: `1px solid ${aiResult.action === 'release' ? '#00ff00' : '#f43f5e'}`, 
-              padding: '14px', 
-              borderRadius: '4px', 
-              cursor: 'pointer', 
-              fontWeight: 700, 
-              fontSize: '1rem', 
-              textTransform: 'uppercase',
-              letterSpacing: '1px' 
-            }}
-          >
-            {isExecutingTx ? "EXECUTING ON-CHAIN TRANSACTION..." : `EXECUTE ${aiResult.action.toUpperCase()} VIA METAMASK`}
-          </button>
+          {canSettleOnChain ? (
+            <button
+              type="button"
+              onClick={handleExecuteContract}
+              disabled={isExecutingTx}
+              style={{
+                width: '100%',
+                backgroundColor: aiResult.action === 'release' ? 'rgba(0, 255, 0, 0.15)' : 'rgba(244, 63, 94, 0.15)',
+                color: aiResult.action === 'release' ? '#00ff00' : '#f43f5e',
+                border: `1px solid ${aiResult.action === 'release' ? '#00ff00' : '#f43f5e'}`,
+                padding: '14px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: 700,
+                fontSize: '1rem',
+                textTransform: 'uppercase',
+                letterSpacing: '1px'
+              }}
+            >
+              {isExecutingTx
+                ? "AWAITING SEPOLIA CONFIRMATION..."
+                : `EXECUTE ${aiResult.action === 'release' ? 'RELEASE' : 'REFUND'} VIA METAMASK`}
+            </button>
+          ) : (
+            <p style={{ color: '#fbbf24', fontSize: '0.9rem', margin: 0 }}>
+              Verdict does not map to an on-chain settlement method ({aiResult.rawAction}). No MetaMask transaction will be sent.
+            </p>
+          )}
         </div>
       )}
 

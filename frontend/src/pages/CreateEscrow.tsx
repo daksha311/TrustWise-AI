@@ -16,8 +16,14 @@ export default function CreateEscrow({ sellerAddress, setSellerAddress, depositA
       <h3 style={{ color: '#00ff00', fontSize: '1.1rem', marginTop: 0, marginBottom: '20px' }}>[01] ESCROW INITIALIZER VECTORS</h3>
       <form onSubmit={handleCreateEscrow} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         <div>
-          <label style={{ display: 'block', color: '#888888', fontSize: '0.85rem', marginBottom: '6px' }}>Counterparty Seller Public Key Address</label>
-          <input type="text" value={sellerAddress} onChange={(e) => setSellerAddress(e.target.value)} placeholder="0x..." style={{ width: '100%', padding: '12px 16px', borderRadius: '4px', border: '1px solid #333333', backgroundColor: '#000000', color: '#fff', boxSizing: 'border-box', fontSize: '0.95rem', fontFamily: 'monospace' }} />
+          <label style={{ display: 'block', color: '#888888', fontSize: '0.85rem', marginBottom: '6px' }}>Counterparty Seller Wallet Address</label>
+          <input
+            type="text"
+            value={sellerAddress}
+            onChange={(e) => setSellerAddress(e.target.value)}
+            placeholder="0xAbC... (40 hex chars — not the ETH amount)"
+            style={{ width: '100%', padding: '12px 16px', borderRadius: '4px', border: '1px solid #333333', backgroundColor: '#000000', color: '#fff', boxSizing: 'border-box', fontSize: '0.95rem', fontFamily: 'monospace' }}
+          />
         </div>
         <div>
           <label style={{ display: 'block', color: '#888888', fontSize: '0.85rem', marginBottom: '6px' }}>Lock Allocation Amount (Sepolia ETH)</label>

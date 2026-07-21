@@ -38,33 +38,42 @@ export const verifyProof = async (proof, disputeId, escrowId, buyer, seller, amo
 /**
  * Resolve a dispute
  */
-export const resolveDispute = async (proof, disputeId, escrowId, buyer, seller, amount) => {
-  try {
-    const response = await fetch(`${BACKEND_URL}/api/dispute/resolve`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        proof,
-        disputeId,
-        escrowId,
-        buyer,
-        seller,
-        amount
-      }),
-    });
-    
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to resolve dispute');
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Dispute resolution failed:', error);
-    throw error;
+export const resolveDispute = async ({
+  disputeId,
+  escrowId,
+  trackingNumber,
+  buyer,
+  seller,
+  buyerClaim,
+  sellerClaim,
+  amount,
+  proof = null
+}) => {
+  const response = await fetch(`${BACKEND_URL}/api/dispute/resolve`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      disputeId,
+      escrowId,
+      trackingNumber,
+      buyer,
+      seller,
+      buyerClaim,
+      sellerClaim,
+      amount,
+      proof
+    }),
+  });
+
+  const json = await response.json();
+
+  if (!response.ok) {
+    throw new Error(json.error?.message || json.message || "Failed to resolve dispute");
   }
+
+  return json;
 };
 
 /**

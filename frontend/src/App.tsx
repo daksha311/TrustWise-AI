@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
-import { connectWallet, getEscrowContract } from './web3Service';
+import { connectWallet, getEscrowContract, fetchDashboardMetrics } from './web3Service';
 import { ethers } from 'ethers';
 
 // Import views
@@ -81,27 +81,24 @@ export default function App() {
   const [statusMessage, setStatusMessage] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [contractDetails, setContractDetails] = useState<string>("Initializing Connection...");
+  const [totalEscrows, setTotalEscrows] = useState<number>(0);
+  const [activeVaults, setActiveVaults] = useState<number>(0);
+  const [disputedAssets, setDisputedAssets] = useState<number>(0);
 
   const [sellerAddress, setSellerAddress] = useState<string>("");
   const [depositAmount, setDepositAmount] = useState<string>("");
 
-  // 1. Lifted fetchContractData to top-level scope using useCallback
   const fetchContractData = useCallback(async () => {
     if (!walletAddress) return;
     try {
       setStatusMessage("⏳ Querying smart contract state...");
-      const contract = await getEscrowContract();
-      const contractTarget = await contract.getAddress();
-      
-      let totalEscrows = "0";
-      try {
-        const counter = await contract.escrowCounter();
-        totalEscrows = counter.toString();
-      } catch (e) {
-        console.log("Counter read exception, defaulting layout map.");
-      }
-      
-      setContractDetails(`Live at: ${contractTarget.substring(0, 6)}... | Total: ${totalEscrows}`);
+      const metrics = await fetchDashboardMetrics();
+      setTotalEscrows(metrics.totalEscrows);
+      setActiveVaults(metrics.activeVaults);
+      setDisputedAssets(metrics.disputedAssets);
+      setContractDetails(
+        `Live at: ${metrics.contractAddress.substring(0, 6)}...${metrics.contractAddress.slice(-4)} | Total: ${metrics.totalEscrows}`
+      );
       setStatusMessage("🟢 Contract handshake completed successfully.");
     } catch (error: any) {
       setContractDetails("Error Interfacing Registry");
@@ -133,15 +130,43 @@ export default function App() {
       setStatusMessage("❌ Please supply a target seller address and valid ETH metric.");
       return;
     }
+
+    const trimmedSeller = sellerAddress.trim();
+    // Accept any 0x + 40 hex; ignore EIP-55 casing (ethers.isAddress rejects bad checksums)
+    let seller: string;
+    try {
+      if (!/^0x[a-fA-F0-9]{40}$/.test(trimmedSeller)) {
+        throw new Error("bad format");
+      }
+      seller = ethers.getAddress(trimmedSeller.toLowerCase());
+    } catch {
+      setStatusMessage(
+        "❌ Seller must be a wallet address: 0x followed by exactly 40 hex characters."
+      );
+      return;
+    }
+    if (seller.toLowerCase() === walletAddress.toLowerCase()) {
+      setStatusMessage("❌ Seller cannot be your own wallet address.");
+      return;
+    }
+
+    let valueWei: bigint;
+    try {
+      valueWei = ethers.parseEther(depositAmount);
+      if (valueWei <= 0n) throw new Error("zero");
+    } catch {
+      setStatusMessage("❌ Deposit amount must be a positive ETH value, e.g. 0.005");
+      return;
+    }
+
     try {
       setIsLoading(true);
       setStatusMessage("⏳ Broadcasting transaction execution matrix to Sepolia...");
       const contract = await getEscrowContract();
-      
-      // 👇 ADDED gasLimit HERE TO BYPASS RPC ESTIMATION
-      const tx = await contract.createEscrow(sellerAddress, { 
-        value: ethers.parseEther(depositAmount),
-        gasLimit: 300000 
+
+      const tx = await contract.createEscrow(seller, {
+        value: valueWei,
+        gasLimit: 300000,
       });
 
       setStatusMessage("🚀 Transaction broadcasted! Awaiting block confirmation...");
@@ -149,7 +174,11 @@ export default function App() {
       setStatusMessage(`💥 Escrow Vault Initialized! Hash: ${receipt.hash}`);
       fetchContractData();
     } catch (error: any) {
-      setStatusMessage(`❌ Transaction failed: ${error.message}`);
+      const raw = error?.reason || error?.shortMessage || error?.message || "Unknown error";
+      const hint = String(raw).includes("ResolverNotFound")
+        ? " — seller field is not a valid 0x address (ethers tried ENS lookup)."
+        : "";
+      setStatusMessage(`❌ Transaction failed: ${raw}${hint}`);
     } finally {
       setIsLoading(false);
     }
@@ -222,7 +251,10 @@ export default function App() {
                   <Dashboard 
                     walletAddress={walletAddress} 
                     contractDetails={contractDetails} 
-                    statusMessage={statusMessage} 
+                    statusMessage={statusMessage}
+                    totalEscrows={totalEscrows}
+                    activeVaults={activeVaults}
+                    disputedAssets={disputedAssets}
                   />
                 } 
               />
